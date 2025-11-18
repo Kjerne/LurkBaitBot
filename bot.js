@@ -15,10 +15,12 @@ function logWithTime(message) {
 
 // ----------------- State -----------------
 const streamerStats = {};
-const messageQueue = {};       // queued messages per channel
-const cooldownActive = {};     // true/false per channel
-const watchdogTimers = {};     // watchdog timers per channel
+const messageQueue = {};
+const cooldownActive = {};
+const watchdogTimers = {};
+const liveCache = {}; // { channel: { live: bool, lastChecked: timestamp } }
 
+// ----------------- Main -----------------
 (async function main() {
   await initWorkbook();
   await getAppAccessToken();
@@ -29,6 +31,7 @@ const watchdogTimers = {};     // watchdog timers per channel
     messageQueue[c] = [];
     cooldownActive[c] = false;
     watchdogTimers[c] = null;
+    liveCache[c] = { live: false, lastChecked: 0 };
   }
 
   const client = new tmi.Client({
@@ -37,6 +40,23 @@ const watchdogTimers = {};     // watchdog timers per channel
   });
 
   client.connect().catch(logError);
+
+  // ----------------- Periodic live status polling -----------------
+  async function pollLiveStatus(channel) {
+    try {
+      const live = await safeIsLiveAndCategory(channel);
+      liveCache[channel] = { live, lastChecked: Date.now() };
+      logWithTime(`[${channel}] Live status: ${live ? "LIVE" : "OFFLINE"}`);
+    } catch (err) {
+      logWithTime(`[${channel}] Error polling live status: ${err.message}`);
+    }
+  }
+
+  for (const ch of config.channels) {
+    const c = ch.toLowerCase();
+    pollLiveStatus(c); // initial poll
+    setInterval(() => pollLiveStatus(c), config.livePollingInterval || 600_000); // respect interval
+  }
 
   // ----------------- Daily summary -----------------
   async function sendDailySummary() {
@@ -57,7 +77,9 @@ const watchdogTimers = {};     // watchdog timers per channel
 - Total Gold: ${stats.allTime.totalGold}
 - Heaviest Fish: ${stats.allTime.heaviestFish} (${stats.allTime.heaviestWeight}kg)
       `;
-      await sendWebhook(`📊 Daily Summary - ${channel}`, description);
+      if (config.discordWebhook) {
+        await sendWebhook(`📊 Daily Summary - ${channel}`, description);
+      }
       logWithTime(`[${channel}] Daily summary sent`);
     }
   }
@@ -81,15 +103,11 @@ const watchdogTimers = {};     // watchdog timers per channel
     logWithTime(`Bot connected as ${config.botUsername}`);
     for (const ch of config.channels) {
       const c = ch.toLowerCase();
-      try {
-        if (await safeIsLiveAndCategory(c)) {
-          await client.say(`#${c}`, config.message);
-          logWithTime(`[${c}] First message sent`);
-        } else {
-          logWithTime(`[${c}] Streamer not live or category mismatch.`);
-        }
-      } catch (err) {
-        logWithTime(`[${c}] Error sending first message: ${err.message}`);
+      if (liveCache[c]?.live) {
+        await client.say(`#${c}`, config.message);
+        logWithTime(`[${c}] First message sent`);
+      } else {
+        logWithTime(`[${c}] Streamer not live or category mismatch`);
       }
     }
   });
@@ -103,43 +121,48 @@ const watchdogTimers = {};     // watchdog timers per channel
     }
 
     cooldownActive[channelPlain] = true;
-    const msg = messageQueue[channelPlain].shift();
+    messageQueue[channelPlain].shift();
 
     const cooldownTime = config.useRandomCooldown
       ? getRandomCooldown(config.cooldownMin, config.cooldownMax)
       : config.cooldown;
 
     const nextSendTime = new Date(Date.now() + cooldownTime).toLocaleTimeString();
-    logWithTime(`[${channelPlain}] Cooldown before next !fish: ${cooldownTime}ms, will send at ${nextSendTime}`);
+    logWithTime(`[${channelPlain}] Cooldown: ${cooldownTime}ms, next send at ${nextSendTime}`);
     if (messageQueue[channelPlain].length > 0) {
       logWithTime(`[${channelPlain}] Messages queued: ${messageQueue[channelPlain].length}`);
     }
 
-    // ----------------- Watchdog -----------------
+    // Watchdog
     if (config.watchdogEnabled) {
       if (watchdogTimers[channelPlain]) clearTimeout(watchdogTimers[channelPlain]);
       watchdogTimers[channelPlain] = setTimeout(async () => {
-        logWithTime(`[${channelPlain}] Watchdog triggered: resending !fish due to timeout`);
+        logWithTime(`[${channelPlain}] Watchdog triggered`);
         await safeSendMessage(channelPlain);
-      }, config.watchdogHeadspace + cooldownTime); // e.g., 90s + cooldownMax
+      }, cooldownTime + (config.watchdogHeadspace || 90_000));
     }
 
     setTimeout(async () => {
       await safeSendMessage(channelPlain);
       cooldownActive[channelPlain] = false;
-      processQueue(channelPlain); // continue queue
+      processQueue(channelPlain);
     }, cooldownTime);
   }
 
   // ----------------- Safe message sender -----------------
   async function safeSendMessage(channelPlain) {
     try {
-      const live = await safeIsLiveAndCategory(channelPlain);
-      if (live) {
-        await client.say(`#${channelPlain}`, config.message);
-        logWithTime(`[${channelPlain}] Message sent`);
-      } else {
-        logWithTime(`[${channelPlain}] Streamer not live or category mismatch, message skipped`);
+      const live = liveCache[channelPlain]?.live || false;
+      if (!live) {
+        logWithTime(`[${channelPlain}] Streamer not live, skipping`);
+        return;
+      }
+
+      await client.say(`#${channelPlain}`, config.message);
+      logWithTime(`[${channelPlain}] Message sent`);
+
+      if (config.discordWebhook) {
+        await sendWebhook(`🎣 ${channelPlain} !fish caught`, config.message);
       }
     } catch (err) {
       logWithTime(`[${channelPlain}] Error sending message: ${err.message}`);
@@ -154,6 +177,7 @@ const watchdogTimers = {};     // watchdog timers per channel
   // ----------------- On message -----------------
   client.on("message", async (channel, tags, message, self) => {
     if (self) return;
+
     const channelPlain = channel.replace(/^#/, "").toLowerCase();
     const sender = tags.username?.toLowerCase();
     const cleanMsg = message.toLowerCase();
@@ -209,12 +233,11 @@ const watchdogTimers = {};     // watchdog timers per channel
         highestWeight: stats.daily.highestWeight
       });
 
-      // Add message to queue and process
+      // Queue and process
       messageQueue[channelPlain].push(message);
       processQueue(channelPlain);
     }
   });
-
 })();
 
 // ----------------- Safe Twitch wrapper -----------------
