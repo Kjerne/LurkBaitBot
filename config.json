@@ -1,0 +1,19 @@
+{
+  "botUsername": "kjerne",
+  "oauthToken": "oauth:TokenHere",
+  "channels": ["StreamerName"], 
+  "clientId": "ClientID",
+  "clientSecret": "ClientSecret",
+  "message": "!fish",
+  "useRandomCooldown": true,
+  "cooldown": 65000,
+  "cooldownMin": 65000,
+  "cooldownMax": 105000,
+  "checkCategory": true,
+  "targetCategory": "LurkBait Twitch Fishing",
+  "minGold": 200,
+  "triggerUsers": ["StreamerName"],
+  "triggerMention": "@kjerne",
+  "highGoldAlert": 1000,
+  "discordWebhook":"DiscordWebHook"
+}
