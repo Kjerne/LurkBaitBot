@@ -1,5 +1,8 @@
 # LurkBaitBot – Twitch Fishing Bot
 
+**⚠️ Disclaimer:**  
+This bot is for **educational purposes only**. Do **not** use it on Twitch streams without the explicit permission of the streamer. Misuse may result in account bans or other consequences. Use responsibly.
+
 LurkBaitBot is a Twitch bot designed to automate `!fish` commands, track fishing pulls, log stats, provide daily/all-time summaries, send Discord alerts, and Excel logging. Supports multiple streamers, trigger mentions, random cooldowns, and category checks.
 
 ---
