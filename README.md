@@ -1,9 +1,9 @@
-##🎣 LurkBaitBot – Twitch Fishing Bot
-##🤖 AI Assistance Disclaimer
+# 🎣 LurkBaitBot – Twitch Fishing Bot
+## 🤖 AI Assistance Disclaimer
 
 Some portions of the code in this repository were generated or assisted by AI tools, such as ChatGPT.
 
-##⚠️ Important Notes:
+## ⚠️ Important Notes:
 
 * The code may contain bugs or security issues — always review and test thoroughly before use.
 * You are responsible for proper usage and compliance with Twitch Terms of Service.
@@ -11,11 +11,11 @@ Some portions of the code in this repository were generated or assisted by AI to
 
 This repository is intended for learning, experimentation, and educational purposes.
 
-##🐟 Overview
+## 🐟 Overview
 
 LurkBaitBot is a Twitch bot designed to automate !fish commands, track fishing pulls, log stats, provide daily/all-time summaries, send Discord alerts only for summaries, and Excel logging. It supports multiple streamers, trigger mentions, random cooldowns, category checks, and more.
 
-##✨ Features
+## ✨ Features
 
 * 🎯 Automatically sends !fish when a streamer is live or after a trigger mention.
 * 👀 Detects trigger mentions from specific users and starts cooldown timers.
@@ -29,7 +29,7 @@ LurkBaitBot is a Twitch bot designed to automate !fish commands, track fishing p
 * 🛡️ Live caching and polling to reduce Twitch API requests.
 * ⏳ Watchdog system ensures messages are sent if they fail or timeout.
 
-##🛠️ Dependencies
+## 🛠️ Dependencies
 
 Install required packages:
 ```npm install tmi.js exceljs node-cron node-fetch```
@@ -38,7 +38,7 @@ Install required packages:
 * 📅 node-cron – Scheduled daily summaries
 * 🌐 node-fetch – Twitch API calls
 
-##⚙️ Configuration
+## ⚙️ Configuration
 
 The bot uses a config.json file for settings.
 * 🧑‍💻 Bot username and OAuth token
@@ -54,7 +54,7 @@ The bot uses a config.json file for settings.
 * ⏳ Live cache duration and polling interval
 * ⏱️ Watchdog enable/disable and extra headspace time
 
-##🚀 Usage
+## 🚀 Usage
 
 Start the bot:
 ```node bot.js```
@@ -67,13 +67,13 @@ Start the bot:
 * ⚡ webhook.js → Trigger daily summary manually without starting full bot.
 * 📊 excelLogger.js → Handles Excel logging per streamer.
 
-##🗂️ Logs & Data
+## 🗂️ Logs & Data
 * 📝 logs/pulls-<streamer>.txt → Chat pull logs with timestamps.
 * 📊 data/.json → Daily and all-time stats per streamer.
 * 📈 excel/.xlsx → Excel logging (per streamer).
 
-##📝 License
+## 📝 License
 * MIT License – see LICENSE file
 
-##🌐 Repository
+## 🌐 Repository
 * GitHub: https://github.com/Kjerne/LurkBaitBot
