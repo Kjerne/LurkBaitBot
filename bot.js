@@ -7,6 +7,12 @@ const { initWorkbook, logToExcel } = require("./excelLogger");
 const { sendWebhook } = require("./discordNotifier");
 const { getAppAccessToken, isLiveAndCategory } = require("./twitchApi");
 
+// ----------------- Helper for timestamped logging -----------------
+function logWithTime(message) {
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`[${timestamp}] ${message}`);
+}
+
 const waitingForMention = {};
 const streamerStats = {};
 
@@ -14,6 +20,7 @@ const streamerStats = {};
   await initWorkbook();
   await getAppAccessToken();
 
+  // Initialize stats and cooldown flags
   for (const ch of config.channels) {
     const c = ch.toLowerCase();
     streamerStats[c] = getStats(c);
@@ -25,9 +32,9 @@ const streamerStats = {};
     channels: config.channels.map(c => `#${c}`)
   });
 
-  client.connect().catch(logError);
+  client.connect().catch(err => logError(err));
 
-  // Daily summary function
+  // ----------------- Daily summary -----------------
   async function sendDailySummary() {
     const today = new Date().toLocaleDateString();
     for (const ch of config.channels) {
@@ -49,7 +56,7 @@ const streamerStats = {};
       `;
 
       await sendWebhook(`📊 Daily Summary - ${channel}`, description);
-      console.log(`[${channel}] Daily summary sent`);
+      logWithTime(`[${channel}] Daily summary sent`);
     }
   }
 
@@ -58,7 +65,7 @@ const streamerStats = {};
 
   // Schedule daily summary at 23:59 and reset daily stats
   cron.schedule("59 23 * * *", async () => {
-    console.log("Running scheduled daily summary...");
+    logWithTime("Running scheduled daily summary...");
     await sendDailySummary();
     for (const ch of config.channels) {
       const channel = ch.toLowerCase();
@@ -72,28 +79,30 @@ const streamerStats = {};
         rarityCounts: {}
       };
       saveStats(channel, stats);
-      console.log(`[${channel}] Daily stats reset`);
+      logWithTime(`[${channel}] Daily stats reset`);
     }
   });
 
+  // ----------------- On connect -----------------
   client.on("connected", async () => {
-    console.log(`Bot connected as ${config.botUsername}`);
+    logWithTime(`Bot connected as ${config.botUsername}`);
     for (const ch of config.channels) {
       const c = ch.toLowerCase();
       try {
         const live = await safeIsLiveAndCategory(c);
         if (live) {
           await client.say(`#${c}`, config.message);
-          console.log(`[${c}] First message sent`);
+          logWithTime(`[${c}] First message sent`);
         } else {
-          console.log(`[${c}] Streamer not live or category mismatch.`);
+          logWithTime(`[${c}] Streamer not live or category mismatch.`);
         }
       } catch (err) {
-        console.error(`[${c}] Error sending first message:`, err);
+        logWithTime(`[${c}] Error sending first message: ${err.message}`);
       }
     }
   });
 
+  // ----------------- On message -----------------
   client.on("message", async (channel, tags, message, self) => {
     if (self) return;
     const channelPlain = channel.replace(/^#/, "").toLowerCase();
@@ -105,7 +114,7 @@ const streamerStats = {};
       cleanMsg.includes(config.triggerMention.toLowerCase()) &&
       cleanMsg.includes("you caught")
     ) {
-      console.log(`[${channelPlain}] Trigger mention detected from ${sender}`);
+      logWithTime(`[${channelPlain}] Trigger mention detected from ${sender}`);
       logPullRaw(channelPlain, message);
 
       const regex = /you caught a ([^\d]+) weighing ([\d.]+)kg worth (\d+) gold/i;
@@ -118,8 +127,7 @@ const streamerStats = {};
 
       let parts = fullRarityFish.split(" ");
       const rarity = parts[0].toLowerCase();
-      let stars = "",
-        fishName = "";
+      let stars = "", fishName = "";
       for (let i = 1; i < parts.length; i++) {
         if (parts[i].includes("⭐")) stars = parts[i];
         else fishName += (fishName ? " " : "") + parts[i];
@@ -161,7 +169,7 @@ const streamerStats = {};
         highestWeight: stats.daily.highestWeight
       });
 
-      // Cooldown & message logic
+      // ----------------- Cooldown & next message -----------------
       if (waitingForMention[channelPlain]) {
         waitingForMention[channelPlain] = false;
 
@@ -170,8 +178,9 @@ const streamerStats = {};
           cooldownTime = getRandomCooldown(config.cooldownMin, config.cooldownMax);
         }
 
-        console.log(
-          `[${channelPlain}] Cooldown before next !fish: ${cooldownTime}ms`
+        const nextSendTime = new Date(Date.now() + cooldownTime).toLocaleTimeString();
+        logWithTime(
+          `[${channelPlain}] Cooldown before next !fish: ${cooldownTime}ms, will send at ${nextSendTime}`
         );
 
         setTimeout(async () => {
@@ -179,17 +188,12 @@ const streamerStats = {};
             const live = await safeIsLiveAndCategory(channelPlain);
             if (live) {
               await client.say(`#${channelPlain}`, config.message);
-              console.log(`[${channelPlain}] Message sent after cooldown`);
+              logWithTime(`[${channelPlain}] Message sent after cooldown`);
             } else {
-              console.log(
-                `[${channelPlain}] Streamer not live or category mismatch, skipping message`
-              );
+              logWithTime(`[${channelPlain}] Streamer not live or category mismatch, skipping message`);
             }
           } catch (err) {
-            console.error(
-              `[${channelPlain}] Error sending message after cooldown:`,
-              err
-            );
+            logWithTime(`[${channelPlain}] Error sending message after cooldown: ${err.message}`);
           } finally {
             waitingForMention[channelPlain] = true;
           }
@@ -199,24 +203,18 @@ const streamerStats = {};
   });
 })();
 
-/**
- * Safe wrapper for isLiveAndCategory with retries and token refresh.
- * Returns true/false. Errors are only logged if real fetch/network failure occurs.
- */
+// ----------------- Safe Twitch wrapper -----------------
 async function safeIsLiveAndCategory(channel, retries = 2) {
   try {
-    return await isLiveAndCategory(channel); // true/false
+    return await isLiveAndCategory(channel);
   } catch (err) {
     if (retries > 0) {
-      console.warn(`[${channel}] Twitch API error, retrying...`, err.message);
-      await new Promise((r) => setTimeout(r, 2000));
+      logWithTime(`[${channel}] Twitch API error, retrying... ${err.message}`);
+      await new Promise(r => setTimeout(r, 2000));
       return safeIsLiveAndCategory(channel, retries - 1);
     } else {
-      console.error(
-        `[${channel}] Twitch API failed after retries:`,
-        err.message
-      );
-      return false; // fail-safe
+      logWithTime(`[${channel}] Twitch API failed after retries: ${err.message}`);
+      return false;
     }
   }
 }
