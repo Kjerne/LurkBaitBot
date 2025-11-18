@@ -47,7 +47,7 @@ Install required packages:
 
 ⦁	🌐 node-fetch – Twitch API calls
 
-## Configuration
+## ⚙️ Configuration
 
 The bot uses a config.json file for settings.
 
