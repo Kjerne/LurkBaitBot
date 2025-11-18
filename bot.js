@@ -160,10 +160,7 @@ const liveCache = {}; // { channel: { live: bool, lastChecked: timestamp } }
 
       await client.say(`#${channelPlain}`, config.message);
       logWithTime(`[${channelPlain}] Message sent`);
-
-      if (config.discordWebhook) {
-        await sendWebhook(`🎣 ${channelPlain} !fish caught`, config.message);
-      }
+      // <-- NO webhook here for triggered messages
     } catch (err) {
       logWithTime(`[${channelPlain}] Error sending message: ${err.message}`);
     } finally {
