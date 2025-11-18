@@ -1,9 +1,21 @@
 # 🎣 LurkBaitBot – Twitch Fishing Bot
 
-**⚠️ Disclaimer:**  
-This bot is for **educational purposes only**. Do **not** use it on Twitch streams without the explicit permission of the streamer. Misuse may result in account bans or other consequences. Use responsibly.
+🤖 AI Assistance Disclaimer
 
-LurkBaitBot is a Twitch bot designed to automate `!fish` commands, track fishing pulls, log stats, provide daily/all-time summaries, send Discord alerts, and Excel logging. Supports multiple streamers, trigger mentions, random cooldowns, and category checks.
+* Some portions of the code in this repository were generated or assisted by AI tools, such as ChatGPT.
+
+⚠️ Important Notes:
+
+* The code may contain bugs or security issues — always review and test thoroughly before use.
+
+* You are responsible for proper usage and compliance with Twitch Terms of Service.
+
+* No sensitive credentials (OAuth tokens, passwords, API keys) are included in this repository.
+
+This disclaimer is provided for transparency and educational purposes.
+The repository is intended for learning, experimentation, and educational use only.
+
+## 🐟 LurkBaitBot is a Twitch bot designed to automate `!fish` commands, track fishing pulls, log stats, provide daily/all-time summaries, send Discord alerts, and Excel logging. Supports multiple streamers, trigger mentions, random cooldowns, and category checks.
 
 ---
 
