@@ -3,7 +3,7 @@
 
 Some portions of the code in this repository were generated or assisted by AI tools, such as ChatGPT.
 
-# ⚠️ Important Notes:
+⚠️ Important Notes:
 
 * The code may contain bugs or security issues — always review and test thoroughly before use.
 * You are responsible for proper usage and compliance with Twitch Terms of Service.
