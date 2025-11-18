@@ -1,22 +1,28 @@
 {
-  "botUsername": "kjerne",
-  "oauthToken": "oauth:TokenHere",
-  "channels": ["StreamerName"], 
-  "clientId": "ClientID",
-  "clientSecret": "ClientSecret",
-  "message": "!fish",
-  "useRandomCooldown": true,
-  "cooldown": 65000,
-  "cooldownMin": 65000,
-  "cooldownMax": 105000,
-  "checkCategory": true,
-  "targetCategory": "LurkBait Twitch Fishing",
-  "minGold": 200,
-  "triggerUsers": ["StreamerName"],
-  "triggerMention": "@kjerne",
-  "highGoldAlert": 1000,
-  "discordWebhook":"DiscordWebHook",
-  "watchdogEnabled": true,
-  "watchdogHeadspace": 90000
-}
+  "botUsername": "YOUR_BOT_USERNAME",        // -- Twitch bot username
+  "oauthToken": "YOUR_OAUTH_TOKEN",          // -- OAuth token for Twitch bot
+  "channels": ["STREAMER_NAME"],             // -- Channels to join
+  "clientId": "YOUR_TWITCH_CLIENT_ID",       // -- Twitch API client ID
+  "clientSecret": "YOUR_TWITCH_CLIENT_SECRET", // -- Twitch API client secret
+  "message": "!fish",                        // -- Message bot will send
 
+  "useRandomCooldown": false,                // -- Use random cooldown between min/max
+  "cooldown": 65000,                         // -- Fixed cooldown in ms
+  "cooldownMin": 65000,                      // -- Random cooldown min in ms
+  "cooldownMax": 105000,                     // -- Random cooldown max in ms
+
+  "checkCategory": true,                     // -- Only send message if streamer is in target category
+  "targetCategory": "TARGET_CATEGORY_NAME",  // -- Target Twitch category to match
+
+  "minGold": 200,                            // -- Minimum gold to trigger alert
+  "triggerUsers": ["TRIGGER_USER"],          // -- Twitch usernames that can trigger bot
+  "triggerMention": "@BOT_MENTION",          // -- Mention that triggers bot
+  "highGoldAlert": 1000,                     // -- Threshold for high gold alert
+
+  "discordWebhook": "YOUR_DISCORD_WEBHOOK",  // -- Discord webhook URL for notifications
+
+  "liveCacheSeconds": 600,                   // -- How long to cache Twitch live status (seconds)
+  "livePollingInterval": 600000,             // -- Poll Twitch for live status interval (ms)
+  "watchdogEnabled": true,                   // -- Enable watchdog to resend messages on timeout
+  "watchdogHeadspace": 75000                 // -- Extra time for watchdog before resending (ms)
+}
