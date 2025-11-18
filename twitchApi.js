@@ -27,14 +27,22 @@ async function getAppAccessToken() {
 }
 
 /**
+ * Sleep helper
+ */
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+/**
  * Check if a streamer is live and matches category.
- * Retries transient network errors up to `retries` times.
+ * Retries network errors using exponential backoff.
  * @param {string} channel - Twitch username
  * @param {boolean} retryToken - whether to retry token refresh
  * @param {number} retries - number of network retries remaining
+ * @param {number} backoff - backoff in ms (starts at 1000ms)
  * @returns {boolean} true if live (and category matches if configured)
  */
-async function isLiveAndCategory(channel, retryToken = true, retries = 3) {
+async function isLiveAndCategory(channel, retryToken = true, retries = 3, backoff = 1000) {
   if (!accessToken) await getAppAccessToken();
 
   try {
@@ -52,7 +60,7 @@ async function isLiveAndCategory(channel, retryToken = true, retries = 3) {
     if (res.status === 401 && retryToken) {
       console.warn(`[${channel}] Token expired, refreshing...`);
       await getAppAccessToken();
-      return isLiveAndCategory(channel, false, retries);
+      return isLiveAndCategory(channel, false, retries, backoff);
     }
 
     if (!res.ok) {
@@ -68,14 +76,15 @@ async function isLiveAndCategory(channel, retryToken = true, retries = 3) {
 
     if (!config.checkCategory) return true;
     return stream.game_name.toLowerCase() === config.targetCategory.toLowerCase();
+
   } catch (err) {
     if (retries > 0) {
-      console.warn(`[${channel}] Twitch API network error, retrying... (${retries} left)`, err.message);
-      await new Promise((r) => setTimeout(r, 2000)); // wait 2 sec before retry
-      return isLiveAndCategory(channel, retryToken, retries - 1);
+      console.warn(`[${channel}] Network error, retrying in ${backoff}ms (${retries} retries left):`, err.message);
+      await sleep(backoff);
+      return isLiveAndCategory(channel, retryToken, retries - 1, backoff * 2); // exponential backoff
     } else {
       console.error(`[${channel}] Twitch API failed after retries:`, err.message);
-      return false; // fail-safe
+      return false;
     }
   }
 }
