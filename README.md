@@ -63,7 +63,7 @@ Start the bot:
 * 📝 Pulls are logged and stats updated.
 * 🗓️ Daily and all-time summaries sent via Discord on startup and at 23:59.
 
-#🧩 Optional Scripts
+# 🧩 Optional Scripts
 * ⚡ webhook.js → Trigger daily summary manually without starting full bot.
 * 📊 excelLogger.js → Handles Excel logging per streamer.
 
