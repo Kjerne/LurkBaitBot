@@ -7,7 +7,7 @@ const { initWorkbook, logToExcel } = require("./excelLogger");
 const { sendWebhook } = require("./discordNotifier");
 const { getAppAccessToken, isLiveAndCategory, validateOAuthToken } = require("./twitchApi");
 const { logWithTime, logError } = require("./logger");
-const { queueMessage } = require("./queueManager");
+const { queueFish } = require("./queueManager");
 
 // ----------------- Config Validation -----------------
 function validateConfig() {
@@ -45,11 +45,11 @@ async function safeIsLiveAndCategory(channel, retries = 2) {
 
 // ----------------- Safe message sender -----------------
 async function safeSendMessage(channelPlain, client, msg = config.message) {
+  if (!liveCache[channelPlain]?.live) {
+    logWithTime(`[${channelPlain}] Streamer not live, skipping message`);
+    return;
+  }
   try {
-    if (!liveCache[channelPlain]?.live) {
-      logWithTime(`[${channelPlain}] Streamer not live, skipping message`);
-      return;
-    }
     await client.say(`#${channelPlain}`, msg);
     logWithTime(`[${channelPlain}] Message sent: ${msg}`);
   } catch (err) {
@@ -69,7 +69,7 @@ if (config.heartbeatIntervalHours) {
 // ----------------- Main -----------------
 (async function main() {
   try {
-    // Validate OAuth token at startup
+    // Validate OAuth token
     const validation = await validateOAuthToken(config.oauthToken);
     if (!validation.valid) {
       logError(`OAuth token invalid: ${validation.error}`);
@@ -150,8 +150,7 @@ if (config.heartbeatIntervalHours) {
       logWithTime(`Bot connected as ${config.botUsername}`);
       for (const ch of config.channels) {
         const c = ch.toLowerCase();
-        if (liveCache[c]?.live) await safeSendMessage(c, client);
-        else logWithTime(`[${c}] Streamer not live or category mismatch`);
+        if (liveCache[c]?.live) queueFish(c, client, safeSendMessage); // send !fish immediately
       }
     });
 
@@ -162,6 +161,7 @@ if (config.heartbeatIntervalHours) {
       const sender = tags.username?.toLowerCase();
       const cleanMsg = message.toLowerCase();
 
+      // Trigger detection (catch event)
       if (
         config.triggerUsers.includes(sender) &&
         cleanMsg.includes(config.triggerMention.toLowerCase()) &&
@@ -170,6 +170,7 @@ if (config.heartbeatIntervalHours) {
         logWithTime(`[${channelPlain}] Trigger mention detected from ${sender}`);
         logPullRaw(channelPlain, message);
 
+        // Parse catch info
         const regex = /you caught a ([^\d]+) weighing ([\d.]+)kg worth (\d+) gold/i;
         const match = message.match(regex);
         if (!match) return;
@@ -203,6 +204,7 @@ if (config.heartbeatIntervalHours) {
         stats.daily.rarityCounts[rarity + stars] = (stats.daily.rarityCounts[rarity + stars] || 0) + 1;
         saveStats(channelPlain, stats);
 
+        // Log to Excel
         await logToExcel(channelPlain, {
           timestamp: new Date().toLocaleTimeString(),
           rarity, stars, fishName, weight, gold,
@@ -211,10 +213,10 @@ if (config.heartbeatIntervalHours) {
           highestWeight: stats.daily.highestWeight
         });
 
-        // Queue message with cooldown logging
-        queueMessage(channelPlain, message, client, safeSendMessage);
+        // ----------------- Queue !fish -----------------
+        queueFish(channelPlain, client, safeSendMessage);
 
-        // High gold alert
+        // ----------------- High gold alert -----------------
         if (gold >= config.highGoldAlert) {
           const alertMsg = `🔥 ${sender} just caught ${fullRarityFish} worth ${gold} gold!`;
           logWithTime(`[${channelPlain}] High gold alert: ${alertMsg}`);
