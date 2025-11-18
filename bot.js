@@ -13,18 +13,20 @@ function logWithTime(message) {
   console.log(`[${timestamp}] ${message}`);
 }
 
-const waitingForMention = {};
+// ----------------- State -----------------
+const waitingForMention = {}; // true/false per channel
+const messageQueue = {};      // queued messages per channel
 const streamerStats = {};
 
 (async function main() {
   await initWorkbook();
   await getAppAccessToken();
 
-  // Initialize stats and cooldown flags
   for (const ch of config.channels) {
     const c = ch.toLowerCase();
     streamerStats[c] = getStats(c);
     waitingForMention[c] = true;
+    messageQueue[c] = [];
   }
 
   const client = new tmi.Client({
@@ -40,7 +42,6 @@ const streamerStats = {};
     for (const ch of config.channels) {
       const channel = ch.toLowerCase();
       const stats = getStats(channel);
-
       const description = `
 📅 Date: ${today}
 **Daily Summary**
@@ -54,30 +55,21 @@ const streamerStats = {};
 - Total Gold: ${stats.allTime.totalGold}
 - Heaviest Fish: ${stats.allTime.heaviestFish} (${stats.allTime.heaviestWeight}kg)
       `;
-
       await sendWebhook(`📊 Daily Summary - ${channel}`, description);
       logWithTime(`[${channel}] Daily summary sent`);
     }
   }
 
-  // Send summary on startup
   await sendDailySummary();
 
-  // Schedule daily summary at 23:59 and reset daily stats
+  // Schedule daily summary
   cron.schedule("59 23 * * *", async () => {
     logWithTime("Running scheduled daily summary...");
     await sendDailySummary();
     for (const ch of config.channels) {
       const channel = ch.toLowerCase();
       const stats = getStats(channel);
-      stats.daily = {
-        totalPulls: 0,
-        totalGold: 0,
-        highestGold: 0,
-        highestWeight: 0,
-        heaviestFish: "",
-        rarityCounts: {}
-      };
+      stats.daily = { totalPulls:0, totalGold:0, highestGold:0, highestWeight:0, heaviestFish:"", rarityCounts:{} };
       saveStats(channel, stats);
       logWithTime(`[${channel}] Daily stats reset`);
     }
@@ -101,6 +93,41 @@ const streamerStats = {};
       }
     }
   });
+
+  // ----------------- Cooldown queue helpers -----------------
+  const processQueue = async (channelPlain) => {
+    if (messageQueue[channelPlain].length === 0) {
+      waitingForMention[channelPlain] = true;
+      return;
+    }
+
+    waitingForMention[channelPlain] = false;
+    const msg = messageQueue[channelPlain].shift();
+
+    const cooldownTime = config.useRandomCooldown
+      ? getRandomCooldown(config.cooldownMin, config.cooldownMax)
+      : config.cooldown;
+
+    const nextSendTime = new Date(Date.now() + cooldownTime).toLocaleTimeString();
+    logWithTime(`[${channelPlain}] Cooldown before next !fish: ${cooldownTime}ms, will send at ${nextSendTime}`);
+
+    setTimeout(async () => {
+      try {
+        const live = await safeIsLiveAndCategory(channelPlain);
+        if (live) {
+          await client.say(`#${channelPlain}`, config.message);
+          logWithTime(`[${channelPlain}] Message sent after cooldown`);
+        } else {
+          logWithTime(`[${channelPlain}] Streamer not live or category mismatch, skipping message`);
+        }
+      } catch (err) {
+        logWithTime(`[${channelPlain}] Error sending message after cooldown: ${err.message}`);
+      } finally {
+        // After sending, process next item in queue if any
+        processQueue(channelPlain);
+      }
+    }, cooldownTime);
+  };
 
   // ----------------- On message -----------------
   client.on("message", async (channel, tags, message, self) => {
@@ -135,7 +162,7 @@ const streamerStats = {};
 
       const stats = streamerStats[channelPlain];
 
-      // Update daily stats
+      // Update stats
       stats.daily.totalPulls += 1;
       stats.daily.totalGold += gold;
       if (gold > stats.daily.highestGold) stats.daily.highestGold = gold;
@@ -143,61 +170,28 @@ const streamerStats = {};
         stats.daily.highestWeight = weight;
         stats.daily.heaviestFish = `${rarity}${stars} ${fishName}`;
       }
-
-      // Update all-time stats
       stats.allTime.totalPulls += 1;
       stats.allTime.totalGold += gold;
       if (weight > stats.allTime.heaviestWeight) {
         stats.allTime.heaviestWeight = weight;
         stats.allTime.heaviestFish = `${rarity}${stars} ${fishName}`;
       }
-
-      stats.daily.rarityCounts[rarity + stars] =
-        (stats.daily.rarityCounts[rarity + stars] || 0) + 1;
+      stats.daily.rarityCounts[rarity + stars] = (stats.daily.rarityCounts[rarity + stars] || 0) + 1;
 
       saveStats(channelPlain, stats);
 
       await logToExcel(channelPlain, {
         timestamp: new Date().toLocaleTimeString(),
-        rarity,
-        stars,
-        fishName,
-        weight,
-        gold,
+        rarity, stars, fishName, weight, gold,
         totalGold: stats.daily.totalGold,
         heaviestFish: stats.daily.heaviestFish,
         highestWeight: stats.daily.highestWeight
       });
 
-      // ----------------- Cooldown & next message -----------------
+      // Add to queue and process if free
+      messageQueue[channelPlain].push(message);
       if (waitingForMention[channelPlain]) {
-        waitingForMention[channelPlain] = false;
-
-        let cooldownTime = config.cooldown;
-        if (config.useRandomCooldown) {
-          cooldownTime = getRandomCooldown(config.cooldownMin, config.cooldownMax);
-        }
-
-        const nextSendTime = new Date(Date.now() + cooldownTime).toLocaleTimeString();
-        logWithTime(
-          `[${channelPlain}] Cooldown before next !fish: ${cooldownTime}ms, will send at ${nextSendTime}`
-        );
-
-        setTimeout(async () => {
-          try {
-            const live = await safeIsLiveAndCategory(channelPlain);
-            if (live) {
-              await client.say(`#${channelPlain}`, config.message);
-              logWithTime(`[${channelPlain}] Message sent after cooldown`);
-            } else {
-              logWithTime(`[${channelPlain}] Streamer not live or category mismatch, skipping message`);
-            }
-          } catch (err) {
-            logWithTime(`[${channelPlain}] Error sending message after cooldown: ${err.message}`);
-          } finally {
-            waitingForMention[channelPlain] = true;
-          }
-        }, cooldownTime);
+        processQueue(channelPlain);
       }
     }
   });
