@@ -1,28 +1,29 @@
 {
-  "botUsername": "YOUR_BOT_USERNAME",        // -- Twitch bot username
-  "oauthToken": "YOUR_OAUTH_TOKEN",          // -- OAuth token for Twitch bot
-  "channels": ["STREAMER_NAME"],             // -- Channels to join
-  "clientId": "YOUR_TWITCH_CLIENT_ID",       // -- Twitch API client ID
-  "clientSecret": "YOUR_TWITCH_CLIENT_SECRET", // -- Twitch API client secret
-  "message": "!fish",                        // -- Message bot will send
+  "botUsername": "YOUR_BOT_USERNAME", // -- Twitch bot username
+  "oauthToken": "oauth:YOUR_OAUTH_TOKEN", // -- Twitch OAuth token for bot login
+  "channels": ["CHANNEL_NAME"], // -- Twitch channels to join/listen to
+  "clientId": "YOUR_TWITCH_CLIENT_ID", // -- Twitch app Client ID
+  "clientSecret": "YOUR_TWITCH_CLIENT_SECRET", // -- Twitch app Client Secret
+  "message": "!fish", // -- Default message bot sends
 
-  "useRandomCooldown": false,                // -- Use random cooldown between min/max
-  "cooldown": 65000,                         // -- Fixed cooldown in ms
-  "cooldownMin": 65000,                      // -- Random cooldown min in ms
-  "cooldownMax": 105000,                     // -- Random cooldown max in ms
+  "useRandomCooldown": false, // -- Whether to use random cooldown between messages
+  "cooldown": 65000, // -- Fixed cooldown in milliseconds if useRandomCooldown is false
+  "cooldownMin": 65000, // -- Minimum cooldown in ms if using random cooldown
+  "cooldownMax": 105000, // -- Maximum cooldown in ms if using random cooldown
 
-  "checkCategory": true,                     // -- Only send message if streamer is in target category
-  "targetCategory": "TARGET_CATEGORY_NAME",  // -- Target Twitch category to match
+  "checkCategory": true, // -- Whether to check Twitch stream category
+  "targetCategory": ["LurkBait Twitch Fishing"], // -- Allowed Twitch categories for sending messages
+  "minGold": 200, // -- Minimum gold to consider a pull for alerts
+  "triggerUsers": ["USERNAME"], // -- Users whose messages trigger bot actions
+  "triggerMention": "@BOT_USERNAME", // -- Bot mention trigger keyword
+  "highGoldAlert": 1000, // -- Gold threshold for high gold alerts
 
-  "minGold": 200,                            // -- Minimum gold to trigger alert
-  "triggerUsers": ["TRIGGER_USER"],          // -- Twitch usernames that can trigger bot
-  "triggerMention": "@BOT_MENTION",          // -- Mention that triggers bot
-  "highGoldAlert": 1000,                     // -- Threshold for high gold alert
+  "discordWebhook": "YOUR_DISCORD_WEBHOOK_URL", // -- Discord webhook for notifications
 
-  "discordWebhook": "YOUR_DISCORD_WEBHOOK",  // -- Discord webhook URL for notifications
+  "liveCacheSeconds": 600, // -- How long to cache live status in seconds
+  "livePollingInterval": 600000, // -- Interval for polling Twitch live status in ms
+  "watchdogEnabled": true, // -- Enable watchdog to resend messages if missed
+  "watchdogHeadspace": 75000, // -- Extra ms added to cooldown before watchdog triggers
 
-  "liveCacheSeconds": 600,                   // -- How long to cache Twitch live status (seconds)
-  "livePollingInterval": 600000,             // -- Poll Twitch for live status interval (ms)
-  "watchdogEnabled": true,                   // -- Enable watchdog to resend messages on timeout
-  "watchdogHeadspace": 75000                 // -- Extra time for watchdog before resending (ms)
+  "heartbeatIntervalHours": 1 // -- Interval for sending heartbeat to Discord in hours
 }
