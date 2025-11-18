@@ -15,5 +15,8 @@
   "triggerUsers": ["StreamerName"],
   "triggerMention": "@kjerne",
   "highGoldAlert": 1000,
-  "discordWebhook":"DiscordWebHook"
+  "discordWebhook":"DiscordWebHook",
+  "watchdogEnabled": true,
+  "watchdogHeadspace": 90000
 }
+
