@@ -83,10 +83,10 @@ Start the bot:
 
 ⦁	excel/<streamer>.xlsx → Excel logging (per streamer)
 
-License
+## License
 
-MIT License – see LICENSE file
+* MIT License – see LICENSE file
 
-Repository
+## Repository
 
-GitHub: https://github.com/Kjerne/LurkBaitBot
+* GitHub: https://github.com/Kjerne/LurkBaitBot
