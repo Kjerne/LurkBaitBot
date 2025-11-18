@@ -3,11 +3,9 @@ const config = require("./config.json");
 const { getStats, saveStats, logPullRaw, logError } = require("./statsManager");
 const { getRandomCooldown } = require("./cooldown");
 const cron = require("node-cron");
-
-// Replace with your own Twitch API / Excel / Discord helper functions if needed
 const { initWorkbook, logToExcel } = require("./excelLogger");
 const { sendWebhook } = require("./discordNotifier");
-const { isLiveAndCategory, getAppAccessToken } = require("./twitchApi");
+const { getAppAccessToken, isLiveAndCategory } = require("./twitchApi");
 
 const waitingForMention = {};
 const streamerStats = {};
@@ -82,11 +80,15 @@ const streamerStats = {};
     console.log(`Bot connected as ${config.botUsername}`);
     for (const ch of config.channels) {
       const c = ch.toLowerCase();
-      if (await isLiveAndCategory(c)) {
-        await client.say(`#${c}`, config.message);
-        console.log(`[${c}] First message sent`);
-      } else {
-        console.log(`[${c}] Streamer not live or category mismatch.`);
+      try {
+        if (await safeIsLiveAndCategory(c)) {
+          await client.say(`#${c}`, config.message);
+          console.log(`[${c}] First message sent`);
+        } else {
+          console.log(`[${c}] Streamer not live or category mismatch.`);
+        }
+      } catch (err) {
+        console.error(`[${c}] Error sending first message:`, err);
       }
     }
   });
@@ -110,13 +112,13 @@ const streamerStats = {};
 
       const fullRarityFish = match[1].trim();
       const weight = parseFloat(match[2]);
-      const gold = parseInt(match[3],10);
+      const gold = parseInt(match[3], 10);
 
       let parts = fullRarityFish.split(" ");
       const rarity = parts[0].toLowerCase();
       let stars = "", fishName = "";
-      for(let i=1;i<parts.length;i++){
-        if(parts[i].includes("⭐")) stars = parts[i];
+      for (let i = 1; i < parts.length; i++) {
+        if (parts[i].includes("⭐")) stars = parts[i];
         else fishName += (fishName ? " " : "") + parts[i];
       }
 
@@ -139,9 +141,9 @@ const streamerStats = {};
         stats.allTime.heaviestFish = `${rarity}${stars} ${fishName}`;
       }
 
-      stats.daily.rarityCounts[rarity+stars] = (stats.daily.rarityCounts[rarity+stars] || 0) + 1;
+      stats.daily.rarityCounts[rarity + stars] = (stats.daily.rarityCounts[rarity + stars] || 0) + 1;
 
-      saveStats(channelPlain, stats); // Save only after a real pull
+      saveStats(channelPlain, stats);
 
       await logToExcel(channelPlain, {
         timestamp: new Date().toLocaleTimeString(),
@@ -151,7 +153,7 @@ const streamerStats = {};
         highestWeight: stats.daily.highestWeight
       });
 
-      // Cooldown logic with toggle
+      // Cooldown & message logic
       if (waitingForMention[channelPlain]) {
         waitingForMention[channelPlain] = false;
 
@@ -164,14 +166,14 @@ const streamerStats = {};
 
         setTimeout(async () => {
           try {
-            if (await isLiveAndCategory(channelPlain)) {
+            if (await safeIsLiveAndCategory(channelPlain)) {
               await client.say(`#${channelPlain}`, config.message);
               console.log(`[${channelPlain}] Message sent after cooldown`);
             } else {
               console.log(`[${channelPlain}] Streamer not live or category mismatch, skipping message`);
             }
           } catch (err) {
-            console.error(err);
+            console.error(`[${channelPlain}] Error sending message after cooldown:`, err);
           } finally {
             waitingForMention[channelPlain] = true;
           }
@@ -180,3 +182,21 @@ const streamerStats = {};
     }
   });
 })();
+
+/**
+ * Safe wrapper for isLiveAndCategory with retries and token refresh
+ */
+async function safeIsLiveAndCategory(channel, retries = 2) {
+  try {
+    return await isLiveAndCategory(channel);
+  } catch (err) {
+    if (retries > 0) {
+      console.warn(`[${channel}] Twitch API error, retrying...`, err.message);
+      await new Promise(r => setTimeout(r, 2000));
+      return safeIsLiveAndCategory(channel, retries - 1);
+    } else {
+      console.error(`[${channel}] Twitch API failed after retries:`, err.message);
+      return false; // fail-safe
+    }
+  }
+}
