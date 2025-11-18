@@ -75,7 +75,7 @@ Start the bot:
 
 ⦁	🗓️ Daily summary sent via Discord on startup and at 23:59
 
-# Optional scripts:
+# 🧩 Optional scripts
 
 ⦁	⚡ webhook.js → Trigger daily summary manually without starting full bot
 
