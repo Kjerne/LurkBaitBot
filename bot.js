@@ -7,16 +7,17 @@ const { initWorkbook, logToExcel } = require("./excelLogger");
 const { sendWebhook } = require("./discordNotifier");
 const { getAppAccessToken, isLiveAndCategory } = require("./twitchApi");
 
-// ----------------- Helper for timestamped logging -----------------
+// ----------------- Timestamped logging -----------------
 function logWithTime(message) {
   const timestamp = new Date().toLocaleTimeString();
   console.log(`[${timestamp}] ${message}`);
 }
 
 // ----------------- State -----------------
-const waitingForMention = {}; // true/false per channel
-const messageQueue = {};      // queued messages per channel
 const streamerStats = {};
+const messageQueue = {};       // queued messages per channel
+const cooldownActive = {};     // true/false per channel
+const watchdogTimers = {};     // watchdog timers per channel
 
 (async function main() {
   await initWorkbook();
@@ -25,8 +26,9 @@ const streamerStats = {};
   for (const ch of config.channels) {
     const c = ch.toLowerCase();
     streamerStats[c] = getStats(c);
-    waitingForMention[c] = true;
     messageQueue[c] = [];
+    cooldownActive[c] = false;
+    watchdogTimers[c] = null;
   }
 
   const client = new tmi.Client({
@@ -34,7 +36,7 @@ const streamerStats = {};
     channels: config.channels.map(c => `#${c}`)
   });
 
-  client.connect().catch(err => logError(err));
+  client.connect().catch(logError);
 
   // ----------------- Daily summary -----------------
   async function sendDailySummary() {
@@ -62,7 +64,6 @@ const streamerStats = {};
 
   await sendDailySummary();
 
-  // Schedule daily summary
   cron.schedule("59 23 * * *", async () => {
     logWithTime("Running scheduled daily summary...");
     await sendDailySummary();
@@ -81,8 +82,7 @@ const streamerStats = {};
     for (const ch of config.channels) {
       const c = ch.toLowerCase();
       try {
-        const live = await safeIsLiveAndCategory(c);
-        if (live) {
+        if (await safeIsLiveAndCategory(c)) {
           await client.say(`#${c}`, config.message);
           logWithTime(`[${c}] First message sent`);
         } else {
@@ -94,36 +94,62 @@ const streamerStats = {};
     }
   });
 
-  // ----------------- Cooldown + Queue -----------------
-  const scheduleMessage = async (channelPlain, msg) => {
+  // ----------------- Queue processor -----------------
+  async function processQueue(channelPlain) {
+    if (cooldownActive[channelPlain]) return;
+    if (messageQueue[channelPlain].length === 0) {
+      cooldownActive[channelPlain] = false;
+      return;
+    }
+
+    cooldownActive[channelPlain] = true;
+    const msg = messageQueue[channelPlain].shift();
+
     const cooldownTime = config.useRandomCooldown
       ? getRandomCooldown(config.cooldownMin, config.cooldownMax)
       : config.cooldown;
 
     const nextSendTime = new Date(Date.now() + cooldownTime).toLocaleTimeString();
     logWithTime(`[${channelPlain}] Cooldown before next !fish: ${cooldownTime}ms, will send at ${nextSendTime}`);
+    if (messageQueue[channelPlain].length > 0) {
+      logWithTime(`[${channelPlain}] Messages queued: ${messageQueue[channelPlain].length}`);
+    }
+
+    // ----------------- Watchdog -----------------
+    if (config.watchdogEnabled) {
+      if (watchdogTimers[channelPlain]) clearTimeout(watchdogTimers[channelPlain]);
+      watchdogTimers[channelPlain] = setTimeout(async () => {
+        logWithTime(`[${channelPlain}] Watchdog triggered: resending !fish due to timeout`);
+        await safeSendMessage(channelPlain);
+      }, config.watchdogHeadspace + cooldownTime); // e.g., 90s + cooldownMax
+    }
 
     setTimeout(async () => {
-      try {
-        const live = await safeIsLiveAndCategory(channelPlain);
-        if (live) {
-          await client.say(`#${channelPlain}`, config.message);
-          logWithTime(`[${channelPlain}] Message sent after cooldown`);
-        } else {
-          logWithTime(`[${channelPlain}] Streamer not live or category mismatch, skipping message`);
-        }
-      } catch (err) {
-        logWithTime(`[${channelPlain}] Error sending message after cooldown: ${err.message}`);
-      } finally {
-        if (messageQueue[channelPlain].length > 0) {
-          const nextMsg = messageQueue[channelPlain].shift();
-          scheduleMessage(channelPlain, nextMsg);
-        } else {
-          waitingForMention[channelPlain] = true;
-        }
-      }
+      await safeSendMessage(channelPlain);
+      cooldownActive[channelPlain] = false;
+      processQueue(channelPlain); // continue queue
     }, cooldownTime);
-  };
+  }
+
+  // ----------------- Safe message sender -----------------
+  async function safeSendMessage(channelPlain) {
+    try {
+      const live = await safeIsLiveAndCategory(channelPlain);
+      if (live) {
+        await client.say(`#${channelPlain}`, config.message);
+        logWithTime(`[${channelPlain}] Message sent`);
+      } else {
+        logWithTime(`[${channelPlain}] Streamer not live or category mismatch, message skipped`);
+      }
+    } catch (err) {
+      logWithTime(`[${channelPlain}] Error sending message: ${err.message}`);
+    } finally {
+      if (watchdogTimers[channelPlain]) {
+        clearTimeout(watchdogTimers[channelPlain]);
+        watchdogTimers[channelPlain] = null;
+      }
+    }
+  }
 
   // ----------------- On message -----------------
   client.on("message", async (channel, tags, message, self) => {
@@ -173,7 +199,6 @@ const streamerStats = {};
         stats.allTime.heaviestFish = `${rarity}${stars} ${fishName}`;
       }
       stats.daily.rarityCounts[rarity + stars] = (stats.daily.rarityCounts[rarity + stars] || 0) + 1;
-
       saveStats(channelPlain, stats);
 
       await logToExcel(channelPlain, {
@@ -184,13 +209,9 @@ const streamerStats = {};
         highestWeight: stats.daily.highestWeight
       });
 
-      // Add message to queue
+      // Add message to queue and process
       messageQueue[channelPlain].push(message);
-      if (waitingForMention[channelPlain]) {
-        const nextMsg = messageQueue[channelPlain].shift();
-        waitingForMention[channelPlain] = false;
-        scheduleMessage(channelPlain, nextMsg);
-      }
+      processQueue(channelPlain);
     }
   });
 
