@@ -1,15 +1,17 @@
 const { getStats } = require("./statsManager");
 const { sendWebhook } = require("./discordNotifier");
+const { logWithTime, logError } = require("./logger");
 const config = require("./config.json");
 
 (async function sendManual() {
-  const today = new Date().toLocaleDateString();
+  try {
+    const today = new Date().toLocaleDateString();
 
-  for (const ch of config.channels) {
-    const channel = ch.toLowerCase();
-    const stats = getStats(channel);
+    for (const ch of config.channels) {
+      const channel = ch.toLowerCase();
+      const stats = getStats(channel);
 
-    const description = `
+      const description = `
 📅 **Date:** ${today}
 **Daily Summary (manual trigger)**:
 - Total Pulls: ${stats.daily.totalPulls}
@@ -21,9 +23,16 @@ const config = require("./config.json");
 - Total Pulls: ${stats.allTime.totalPulls}
 - Total Gold: ${stats.allTime.totalGold}
 - Heaviest Fish: ${stats.allTime.heaviestFish} (${stats.allTime.heaviestWeight}kg)
-    `;
+      `;
 
-    await sendWebhook(`📊 Daily Summary - ${channel}`, description);
-    console.log(`[${channel}] Manual daily summary sent`);
+      if (config.discordWebhook) {
+        await sendWebhook(`📊 Daily Summary - ${channel}`, description);
+        logWithTime(`[${channel}] Manual daily summary sent`);
+      } else {
+        logWithTime(`[${channel}] Discord webhook not configured, summary skipped`);
+      }
+    }
+  } catch (err) {
+    logError(`Failed to send manual webhook summary: ${err.message}`);
   }
 })();
