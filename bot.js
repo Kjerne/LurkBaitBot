@@ -94,16 +94,8 @@ const streamerStats = {};
     }
   });
 
-  // ----------------- Cooldown queue helpers -----------------
-  const processQueue = async (channelPlain) => {
-    if (messageQueue[channelPlain].length === 0) {
-      waitingForMention[channelPlain] = true;
-      return;
-    }
-
-    waitingForMention[channelPlain] = false;
-    const msg = messageQueue[channelPlain].shift();
-
+  // ----------------- Cooldown + Queue -----------------
+  const scheduleMessage = async (channelPlain, msg) => {
     const cooldownTime = config.useRandomCooldown
       ? getRandomCooldown(config.cooldownMin, config.cooldownMax)
       : config.cooldown;
@@ -123,8 +115,12 @@ const streamerStats = {};
       } catch (err) {
         logWithTime(`[${channelPlain}] Error sending message after cooldown: ${err.message}`);
       } finally {
-        // After sending, process next item in queue if any
-        processQueue(channelPlain);
+        if (messageQueue[channelPlain].length > 0) {
+          const nextMsg = messageQueue[channelPlain].shift();
+          scheduleMessage(channelPlain, nextMsg);
+        } else {
+          waitingForMention[channelPlain] = true;
+        }
       }
     }, cooldownTime);
   };
@@ -188,13 +184,16 @@ const streamerStats = {};
         highestWeight: stats.daily.highestWeight
       });
 
-      // Add to queue and process if free
+      // Add message to queue
       messageQueue[channelPlain].push(message);
       if (waitingForMention[channelPlain]) {
-        processQueue(channelPlain);
+        const nextMsg = messageQueue[channelPlain].shift();
+        waitingForMention[channelPlain] = false;
+        scheduleMessage(channelPlain, nextMsg);
       }
     }
   });
+
 })();
 
 // ----------------- Safe Twitch wrapper -----------------
